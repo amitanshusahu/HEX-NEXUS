@@ -3,9 +3,12 @@
 import { useMutation } from "@tanstack/react-query";
 import api from "../../lib/axios/axios";
 import { API_ROUTES } from "../../lib/api";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { JsonViewer } from "../ui/home/JsonViewer";
 import MessageBox from "../ui/home/MessageBox";
+import AnimatedKolamSVG from "../ui/home/AnimatedKolamSVG";
+import MessageBoxSkeleton from "../ui/home/MessageBoxSkeleton";
+import KolamSkeleton from "../ui/home/KolamSkeleton";
 import React from 'react';
 
 // Define a common structure for image-related results to be used in history
@@ -31,9 +34,22 @@ type OperationData = {
 
 export default function Home() {
     const inputRef = useRef<HTMLInputElement>(null);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [preview, setPreview] = useState<string | null>(null);
     const [file, setFile] = useState<File | null>(null);
     const [operationHistory, setOperationHistory] = useState<OperationData[]>([]);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [isRecreating, setIsRecreating] = useState(false);
+
+    // Auto-scroll to bottom when new operations are added
+    useEffect(() => {
+        if (scrollContainerRef.current && operationHistory.length > 0) {
+            scrollContainerRef.current.scrollTo({
+                top: scrollContainerRef.current.scrollHeight,
+                behavior: 'smooth'
+            });
+        }
+    }, [operationHistory.length]);
 
     // API Mutations (No changes to the basic mutation functions)
     const knowYourKolamMutation = useMutation({
@@ -141,6 +157,7 @@ export default function Home() {
 
         try {
             // 1. Run Initial Analysis
+            setIsAnalyzing(true);
             const [knowResult, searchResult, predictResult] = await Promise.all([
                 knowYourKolamMutation.mutateAsync(originalFile),
                 searchKolamMutation.mutateAsync(originalFile),
@@ -158,13 +175,16 @@ export default function Home() {
                 }
             };
             setOperationHistory(prev => ([...prev, analysisEntry]));
+            setIsAnalyzing(false);
 
             // 2. Render the initial (potentially imperfect) analyzed Kolam
             await renderKolamMutation.mutateAsync(knowResult);
-            
+
             // 3. AUTOMATIC RECREATION: Get the clean, symmetric image
             // Note: We await the recreation, but use its onSuccess to handle state update.
+            setIsRecreating(true);
             await recreateKolamMutation.mutateAsync(originalFile);
+            setIsRecreating(false);
 
             // 4. Clear input fields
             setFile(null);
@@ -172,10 +192,10 @@ export default function Home() {
             if (inputRef.current) inputRef.current.value = "";
         } catch (error) {
             console.error('Error in analyze and recreate flow:', error);
+            setIsAnalyzing(false);
+            setIsRecreating(false);
         }
     };
-
-    // REMOVED: handleRecreate function is now gone
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -187,15 +207,15 @@ export default function Home() {
 
     return (
         <div className="grid grid-cols-5 h-full w-full">
-            {/* main content */}
-            <div className="col-span-4 p-8 w-full bg-gray-50 h-screen overflow-y-auto">
+            <div className="col-span-4 p-8 w-full bg-gray-50 h-screen overflow-y-auto" ref={scrollContainerRef}>
                 <div className="flex flex-col gap-8 h-full">
-                    {(!operationHistory || operationHistory.length < 1) && (
+                    {(!operationHistory || operationHistory.length < 1) && !isAnalyzing && !isRecreating && (
                         <div className="w-full h-full bg-white rounded-2xl p-4 flex items-center justify-center flex-col">
                             <img src="/logo.webp" alt="" />
                             <p className="text-gray-500">Upload a kolam image to get started</p>
                         </div>
                     )}
+
                     {operationHistory.map(operation => {
                         if (operation.type === 'analysis') {
                             return (
@@ -218,34 +238,34 @@ export default function Home() {
                                     </MessageBox>
                                 </div>
                             );
-                        } else if (operation.type === 'render') {
-                            // This is the initial analysis render
-                            return (
-                                <MessageBox key={operation.id} width="fit-content" text={`Here's the kolam rendered from initial analysis:`}>
-                                    <div className="w-full rounded-lg border border-gray-200 bg-white p-4">
-                                        <img 
-                                            src={operation.data.renderedImage?.startsWith("http") ? operation.data.renderedImage : `${import.meta.env.VITE_API_URL}/${operation.data.renderedImage}`}
-                                            alt="Rendered kolam"
-                                            className="w-full h-auto object-contain"
-                                        />
-                                    </div>
-                                </MessageBox>
-                            );
-                        } else if (operation.type === 'recreate') {
+                        }
+                        // else if (operation.type === 'render') {
+                        //     // This is the initial analysis render
+                        //     return (
+                        //         <MessageBox key={operation.id} width="fit-content" text={`Here's the kolam rendered from initial analysis:`}>
+                        //             <div className="w-full rounded-lg border border-gray-200 bg-white p-4">
+                        //                 <img 
+                        //                     src={operation.data.renderedImage?.startsWith("http") ? operation.data.renderedImage : `${import.meta.env.VITE_API_URL}/${operation.data.renderedImage}`}
+                        //                     alt="Rendered kolam"
+                        //                     className="w-full h-auto object-contain"
+                        //                 />
+                        //             </div>
+                        //         </MessageBox>
+                        //     );
+                        // } 
+                        else if (operation.type === 'recreate') {
                             // This is the automatically generated symmetrical kolam
                             return (
                                 <MessageBox key={operation.id} width="fit-content" text={`Automatically generated clean, symmetric Kolam:`}>
-                                    <div className="flex flex-col gap-4 max-w-xl"> 
-                                        <div className="w-full rounded-lg border border-gray-200 bg-white p-4">
-                                            <img
-                                                src={operation.data.recreatedImage?.startsWith("http") ? operation.data.recreatedImage : `${import.meta.env.VITE_API_URL}/${operation.data.recreatedImage}`}
-                                                alt="Recreated kolam"
-                                                className="w-full h-auto max-h-[400px] object-contain"
+                                    <div className="flex flex-col gap-4 max-w-xl">
+                                        <div className="w-full rounded-lg border border-gray-200 bg-white p-8">
+                                            <AnimatedKolamSVG
+                                                svgUrl={operation.data.recreatedImage?.startsWith("http") ? operation.data.recreatedImage : `${import.meta.env.VITE_API_URL}/${operation.data.recreatedImage}`}
                                             />
                                         </div>
                                         <div className="text-gray-600 mt-4">
                                             This kolam was recreated using advanced AI techniques to ensure symmetry and clarity, based on the initial analysis.
-                                            Metrics: 
+                                            Metrics:
                                             {
                                                 operation.data.metrics ? (
                                                     <div>
@@ -263,7 +283,7 @@ export default function Home() {
                                         <div className="mt-4">
                                             <a
                                                 href={operation.data.recreatedImage?.startsWith("http") ? operation.data.recreatedImage : `${import.meta.env.VITE_API_URL}/${operation.data.recreatedImage}`}
-                                                download="recreated_kolam.png"
+                                                download="recreated_kolam.svg"
                                                 className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
                                             >
                                                 📥 Download Symmetrical Kolam
@@ -275,13 +295,21 @@ export default function Home() {
                         }
                         return null;
                     })}
+                    {isAnalyzing && (
+                        <div className="flex flex-col gap-6">
+                            <MessageBoxSkeleton />
+                            <MessageBoxSkeleton />
+                        </div>
+                    )}
+
+                    {isRecreating && <KolamSkeleton />}
                 </div>
             </div>
 
             {/* sidebar */}
             <div className="col-span-1 border-l border-gray-200 p-5">
                 <input type="file" accept="image/*" ref={inputRef} onChange={handleFileChange} className="hidden" />
-                
+
                 <div
                     className="w-full flex flex-col items-center justify-center border-2 border-dashed border-gray-400 rounded-2xl cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition overflow-hidden"
                     onClick={() => inputRef.current?.click()}
