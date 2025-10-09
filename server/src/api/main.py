@@ -17,8 +17,7 @@ from src.api.render import render_kolam, reconstruct_paths
 from src.api.schemas import KolamRequest, Dot, LinePath, CurvePath
 from src.api.img_processing import detect_dots_in_image, detect_lines_and_curves
 from src.api.vector import find_similar
-from src.api.llm import llm_image, llm_prompt_for_kolam
-from src.api.llm import sd_image
+from src.api.llm import  llm_prompt_for_kolam
 from typing import Union
 import tempfile
 import hashlib
@@ -320,23 +319,6 @@ async def predict_image(file: UploadFile = File(...)):
     os.remove(file_path)
     return {"prediction": result}
 
-@app.post("/api/llm")
-async def get_better_image_with_llm(file: UploadFile = File(...)):
-    file_bytes = await file.read()
-    file_b64 = base64.b64encode(file_bytes).decode("utf-8")
-    result = llm_image(file_b64, mime_type=file.content_type)
-
-    return {"llmRecreate": result}
-
-@app.post("/api/stability")
-async def get_better_image_with_stability(file: UploadFile = File(...)):
-    file_bytes = await file.read()
-    file_b64 = base64.b64encode(file_bytes).decode("utf-8")
-
-    prompt = "Make this rangoli (kolam) design more aesthetic, colorful, and traditional."
-    result = sd_image(file_b64, prompt=prompt)
-
-    return {"llmRecreate": f"/img/{result}"}
 
 @app.post("/api/search")
 async def search_similar(file: UploadFile = File(...)):

@@ -9,8 +9,12 @@ import re
 
 from src.api.schemas import KolamRequest
 
-load_dotenv()
-google_api_key = os.environ.get("GOOGLE_API_KEY")
+# Only load .env locally if key is missing (safe hybrid pattern)
+if not os.getenv("GOOGLE_API_KEY"):
+    from pathlib import Path
+    load_dotenv(Path(__file__).resolve().parent / ".env")
+
+google_api_key = os.environ["GOOGLE_API_KEY"]
 client = genai.Client(api_key=google_api_key)
 
 IMG_DIR = "img"

@@ -1,4 +1,3 @@
-# src/api/vector.py
 import os
 import pickle
 from typing import List, Tuple
@@ -12,20 +11,28 @@ DATA_DIR = "imgdata"
 INDEX_FILE = "image_index.faiss"
 META_FILE = "image_paths.pkl"
 
-# Load CLIP model (cached on first use)
-device = "cuda" if torch.cuda.is_available() else "cpu"
-_model, _preprocess = clip.load("ViT-B/32", device=device)
-
-# Global FAISS index + metadata
+# Lazy globals
+_model = None
+_preprocess = None
 _index = None
 _image_paths: List[str] = []
 
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+
+def get_model():
+    global _model, _preprocess
+    if _model is None or _preprocess is None:
+        print("🔹 Loading CLIP model...")
+        _model, _preprocess = clip.load("ViT-B/32", device=device)
+    return _model, _preprocess
+
 
 def _get_embedding(image_path: str) -> np.ndarray:
-    """Convert image to CLIP embedding."""
-    image = _preprocess(Image.open(image_path)).unsqueeze(0).to(device)
+    model, preprocess = get_model()
+    image = preprocess(Image.open(image_path)).unsqueeze(0).to(device)
     with torch.no_grad():
-        embedding = _model.encode_image(image)
+        embedding = model.encode_image(image)
     return embedding.cpu().numpy().astype("float32")
 
 
