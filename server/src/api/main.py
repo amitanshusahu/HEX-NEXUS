@@ -329,8 +329,3 @@ async def search_similar(file: UploadFile = File(...)):
     results = find_similar(file_path, top_k=5)
     os.remove(file_path)
     return {"matches": [p for p, d in results]}
-
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port)
